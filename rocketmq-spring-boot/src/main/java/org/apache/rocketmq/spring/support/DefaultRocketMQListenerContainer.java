@@ -17,21 +17,10 @@
 
 package org.apache.rocketmq.spring.support;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.nio.charset.Charset;
-import java.util.List;
-import java.util.Objects;
 import org.apache.rocketmq.client.AccessChannel;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.MessageSelector;
-import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
-import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
-import org.apache.rocketmq.client.consumer.listener.ConsumeOrderlyContext;
-import org.apache.rocketmq.client.consumer.listener.ConsumeOrderlyStatus;
-import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
-import org.apache.rocketmq.client.consumer.listener.MessageListenerOrderly;
+import org.apache.rocketmq.client.consumer.listener.*;
 import org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueAveragely;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -66,6 +55,13 @@ import org.springframework.messaging.converter.SmartMessageConverter;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.util.Assert;
 import org.springframework.util.MimeTypeUtils;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.nio.charset.Charset;
+import java.util.List;
+import java.util.Objects;
 
 @SuppressWarnings("WeakerAccess")
 public class DefaultRocketMQListenerContainer implements InitializingBean,
@@ -377,9 +373,11 @@ public class DefaultRocketMQListenerContainer implements InitializingBean,
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        // 创建并设置DefaultMQPushConsumer consumer
         initRocketMQPushConsumer();
-
+        // 获取消息具体泛型T类型 RocketMQListener<T> 或者 RocketMQReplyListener<T>
         this.messageType = getMessageType();
+        // 获取监听器的 onMessage 方法的 MethodParameter 对象，以便后续在消息处理时使用
         this.methodParameter = getMethodParameter();
         log.debug("RocketMQ messageType: {}", messageType);
     }
@@ -552,25 +550,38 @@ public class DefaultRocketMQListenerContainer implements InitializingBean,
     }
 
     private MethodParameter getMethodParameter() {
+        // 1. 选择要处理的监听器的最终目标类
         Class<?> targetClass;
         if (rocketMQListener != null) {
             targetClass = AopProxyUtils.ultimateTargetClass(rocketMQListener);
         } else {
             targetClass = AopProxyUtils.ultimateTargetClass(rocketMQReplyListener);
         }
+
+        // 2. 获取消息类型
         Type messageType = this.getMessageType();
+
+        // 3. 确定消息类型的 Class
         Class clazz = null;
         if (messageType instanceof ParameterizedType && messageConverter instanceof SmartMessageConverter) {
+            // 如果 messageType 是参数化类型且 messageConverter 是 SmartMessageConverter 实例
             clazz = (Class) ((ParameterizedType) messageType).getRawType();
         } else if (messageType instanceof Class) {
+            // 如果 messageType 是普通的类
             clazz = (Class) messageType;
         } else {
+            // 如果消息类型不是支持的类型，抛出异常
             throw new RuntimeException("parameterType:" + messageType + " of onMessage method is not supported");
         }
+
         try {
+            // 4. 获取 onMessage 方法
             final Method method = targetClass.getMethod("onMessage", clazz);
+
+            // 5. 创建 MethodParameter 对象并返回
             return new MethodParameter(method, 0);
         } catch (NoSuchMethodException e) {
+            // 如果获取 onMessage 方法失败，抛出异常
             e.printStackTrace();
             throw new RuntimeException("parameterType:" + messageType + " of onMessage method is not supported");
         }
@@ -578,6 +589,7 @@ public class DefaultRocketMQListenerContainer implements InitializingBean,
 
     private Type getMessageType() {
         Class<?> targetClass;
+        // AopProxyUtils.ultimateTargetClass是一个用于获取最终目标类（ultimate target class）的实用工具方法
         if (rocketMQListener != null) {
             targetClass = AopProxyUtils.ultimateTargetClass(rocketMQListener);
         } else {
@@ -585,6 +597,7 @@ public class DefaultRocketMQListenerContainer implements InitializingBean,
         }
         Type matchedGenericInterface = null;
         while (Objects.nonNull(targetClass)) {
+            // 获取实现的接口
             Type[] interfaces = targetClass.getGenericInterfaces();
             if (Objects.nonNull(interfaces)) {
                 for (Type type : interfaces) {
@@ -616,9 +629,13 @@ public class DefaultRocketMQListenerContainer implements InitializingBean,
         Assert.notNull(nameServer, "Property 'nameServer' is required");
         Assert.notNull(topic, "Property 'topic' is required");
 
+        // 构建远程调用工具，传递ak、sk
         RPCHook rpcHook = RocketMQUtil.getRPCHookByAkSk(applicationContext.getEnvironment(),
             this.rocketMQMessageListener.accessKey(), this.rocketMQMessageListener.secretKey());
+
         boolean enableMsgTrace = rocketMQMessageListener.enableMsgTrace();
+
+        // 构建DefaultMQPushConsumer
         if (Objects.nonNull(rpcHook)) {
             consumer = new DefaultMQPushConsumer(consumerGroup, rpcHook, new AllocateMessageQueueAveragely(),
                 enableMsgTrace, this.applicationContext.getEnvironment().
@@ -648,7 +665,9 @@ public class DefaultRocketMQListenerContainer implements InitializingBean,
         consumer.setMaxReconsumeTimes(maxReconsumeTimes);
         consumer.setAwaitTerminationMillisWhenShutdown(awaitTerminationMillisWhenShutdown);
         consumer.setInstanceName(instanceName);
+        // 消息消费模式，默认是集群模式
         switch (messageModel) {
+            // 广播
             case BROADCASTING:
                 consumer.setMessageModel(org.apache.rocketmq.remoting.protocol.heartbeat.MessageModel.BROADCASTING);
                 break;
