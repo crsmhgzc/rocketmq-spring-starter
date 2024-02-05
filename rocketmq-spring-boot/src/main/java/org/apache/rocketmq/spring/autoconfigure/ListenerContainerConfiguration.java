@@ -114,13 +114,14 @@ public class ListenerContainerConfiguration implements ApplicationContextAware {
             counter.incrementAndGet());
         GenericApplicationContext genericApplicationContext = (GenericApplicationContext) applicationContext;
 
-        // 注册监听容器bean
+        // 创建默认监听容器并向spring注册
         genericApplicationContext.registerBean(containerBeanName, DefaultRocketMQListenerContainer.class,
             () -> createRocketMQListenerContainer(containerBeanName, bean, annotation));
 
         DefaultRocketMQListenerContainer container = genericApplicationContext.getBean(containerBeanName,
             DefaultRocketMQListenerContainer.class);
 
+        // 判断监听容器是否已经运行，如果没有则start启动
         if (!container.isRunning()) {
             try {
                 container.start();
@@ -133,34 +134,58 @@ public class ListenerContainerConfiguration implements ApplicationContextAware {
         log.info("Register the listener to container, listenerBeanName:{}, containerBeanName:{}", beanName, containerBeanName);
     }
 
+    /**
+     * 创建默认rocketMQ监听容器
+     * @param name 容器名称
+     * @param bean 目标类
+     * @param annotation 注解信息
+     * @return
+     */
     private DefaultRocketMQListenerContainer createRocketMQListenerContainer(String name, Object bean,
         RocketMQMessageListener annotation) {
         DefaultRocketMQListenerContainer container = new DefaultRocketMQListenerContainer();
 
         container.setRocketMQMessageListener(annotation);
 
+        // 优先获取@RocketMQMessageListener注解上name-server地址，如果没有使用rocketmq全局配置地址
         String nameServer = environment.resolvePlaceholders(annotation.nameServer());
         nameServer = StringUtils.hasLength(nameServer) ? nameServer : rocketMQProperties.getNameServer();
-        String accessChannel = environment.resolvePlaceholders(annotation.accessChannel());
         container.setNameServer(nameServer);
+
+        // 设置accessChannel
+        String accessChannel = environment.resolvePlaceholders(annotation.accessChannel());
         if (StringUtils.hasLength(accessChannel)) {
             container.setAccessChannel(AccessChannel.valueOf(accessChannel));
         }
+
+        // topic
         container.setTopic(environment.resolvePlaceholders(annotation.topic()));
         String tags = environment.resolvePlaceholders(annotation.selectorExpression());
         if (StringUtils.hasLength(tags)) {
             container.setSelectorExpression(tags);
         }
+        // consumerGroup
         container.setConsumerGroup(environment.resolvePlaceholders(annotation.consumerGroup()));
+        // tlsEnable
         container.setTlsEnable(environment.resolvePlaceholders(annotation.tlsEnable()));
+
+        /**
+         * 根据目标类实现RocketMQListener 还是 RocketMQReplyListener 进行类型转换
+         * 不会同时出现，前面registerContainer有判断是否两个都出现
+         */
         if (RocketMQListener.class.isAssignableFrom(bean.getClass())) {
             container.setRocketMQListener((RocketMQListener) bean);
         } else if (RocketMQReplyListener.class.isAssignableFrom(bean.getClass())) {
             container.setRocketMQReplyListener((RocketMQReplyListener) bean);
         }
+
+        // 消息转换器
         container.setMessageConverter(rocketMQMessageConverter.getMessageConverter());
+
+        // 容器名称
         container.setName(name);
 
+        // namespace，根据注解配置 和 全局配置值取值
         String namespace = environment.resolvePlaceholders(annotation.namespace());
         container.setNamespace(RocketMQUtil.getNamespace(namespace,
             rocketMQProperties.getConsumer().getNamespace()));
