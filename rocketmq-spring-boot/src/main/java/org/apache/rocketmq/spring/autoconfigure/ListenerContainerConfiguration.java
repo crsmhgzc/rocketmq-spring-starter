@@ -47,6 +47,9 @@ public class ListenerContainerConfiguration implements ApplicationContextAware {
 
     private ConfigurableApplicationContext applicationContext;
 
+    /**
+     * 用于容器命名递增
+     */
     private AtomicLong counter = new AtomicLong(0);
 
     private ConfigurableEnvironment environment;
