@@ -30,6 +30,7 @@ public class RocketMQListenerConfiguration implements ImportBeanDefinitionRegist
 
     @Override
     public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+        // 向bean容器注册RocketMQMessageListenerBeanPostProcessor
         if (!registry.containsBeanDefinition(RocketMQMessageListenerBeanPostProcessor.class.getName())) {
             registry.registerBeanDefinition(RocketMQMessageListenerBeanPostProcessor.class.getName(),
                     new RootBeanDefinition(RocketMQMessageListenerBeanPostProcessor.class));

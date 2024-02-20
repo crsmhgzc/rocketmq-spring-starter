@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+// 所有涉及RocketMQMessageListener bean初始化时，执行增强、注册相关监听容器操作
 public class RocketMQMessageListenerBeanPostProcessor implements ApplicationContextAware, BeanPostProcessor, InitializingBean {
 
     private ApplicationContext applicationContext;
@@ -50,8 +51,10 @@ public class RocketMQMessageListenerBeanPostProcessor implements ApplicationCont
         Class<?> targetClass = AopUtils.getTargetClass(bean);
         RocketMQMessageListener ann = targetClass.getAnnotation(RocketMQMessageListener.class);
         if (ann != null) {
+            // 执行增强操作
             RocketMQMessageListener enhance = enhance(targetClass, ann);
             if (listenerContainerConfiguration != null) {
+                // 注册监听容器
                 listenerContainerConfiguration.registerContainer(beanName, bean, enhance);
             }
         }
@@ -65,19 +68,23 @@ public class RocketMQMessageListenerBeanPostProcessor implements ApplicationCont
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        // 构建增强器
         buildEnhancer();
         this.listenerContainerConfiguration = this.applicationContext.getBean(ListenerContainerConfiguration.class);
     }
 
     private void buildEnhancer() {
         if (this.applicationContext != null) {
+            // 获取RocketMQMessageListenerBeanPostProcessor.AnnotationEnhancer 注解增强器beans
             Map<String, AnnotationEnhancer> enhancersMap =
                     this.applicationContext.getBeansOfType(AnnotationEnhancer.class, false, false);
             if (enhancersMap.size() > 0) {
+                // 根据 AnnotationEnhancer spring order顺序排序
                 List<AnnotationEnhancer> enhancers = enhancersMap.values()
                         .stream()
                         .sorted(new OrderComparator())
                         .collect(Collectors.toList());
+                // 按责任链方式构建当前增强器
                 this.enhancer = (attrs, element) -> {
                     Map<String, Object> newAttrs = attrs;
                     for (AnnotationEnhancer enh : enhancers) {
@@ -98,6 +105,7 @@ public class RocketMQMessageListenerBeanPostProcessor implements ApplicationCont
         }
     }
 
+    // 增强接口
     public interface AnnotationEnhancer extends BiFunction<Map<String, Object>, AnnotatedElement, Map<String, Object>> {
     }
 }
