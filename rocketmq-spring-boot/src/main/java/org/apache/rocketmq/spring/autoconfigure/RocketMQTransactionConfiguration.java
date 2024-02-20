@@ -49,6 +49,7 @@ public class RocketMQTransactionConfiguration implements ApplicationContextAware
         this.applicationContext = (ConfigurableApplicationContext) applicationContext;
     }
 
+    // SmartInitializingSingleton 接口是 Spring 框架提供的另一种生命周期接口，用于在所有单例 bean 初始化完成后执行特定逻辑
     @Override
     public void afterSingletonsInstantiated() {
         Map<String, Object> beans = this.applicationContext.getBeansWithAnnotation(RocketMQTransactionListener.class)
