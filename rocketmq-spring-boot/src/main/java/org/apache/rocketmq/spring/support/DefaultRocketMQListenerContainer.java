@@ -309,6 +309,9 @@ public class DefaultRocketMQListenerContainer implements InitializingBean,
         return this;
     }
 
+    /**
+     * 销毁Bean执行方法
+     */
     @Override
     public void destroy() {
         this.setRunning(false);
